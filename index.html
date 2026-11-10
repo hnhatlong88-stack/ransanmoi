@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rắn săn mồi – Chơi game Snake online miễn phí</title>
+<meta name="description" content="Chơi game rắn săn mồi (Snake) online miễn phí ngay trên trình duyệt, dùng được trên máy tính và điện thoại, không cần cài đặt.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Rắn săn mồi – Chơi game Snake online miễn phí">
+<meta property="og:description" content="Ăn quả đỏ để dài ra, đừng đụng tường hay thân mình. Chơi ngay trên trình duyệt.">
+<meta name="robots" content="index, follow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#e3f1ee;--ink:#1d2b3a;--muted:#5b6b78;--panel:#ffffff;--g1:#b9e0a5;--g2:#a8d392;--snake:#2b3a67;--food:#e4572e;--shade:rgba(20,40,60,.55);
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14232b;--ink:#e6f0ee;--muted:#9bb0b5;--panel:#1e3139;--g1:#2f5a3d;--g2:#2a5036;--snake:#9fb4ff;--food:#ff7a52;--shade:rgba(10,20,25,.7);color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#14232b;--ink:#e6f0ee;--muted:#9bb0b5;--panel:#1e3139;--g1:#2f5a3d;--g2:#2a5036;--snake:#9fb4ff;--food:#ff7a52;--shade:rgba(10,20,25,.7);color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{background:var(--bg);color:var(--ink);font-family:'Baloo 2',system-ui,'Segoe UI',Roboto,sans-serif;display:flex;justify-content:center;padding:16px}
+main{width:min(92vw,440px);display:flex;flex-direction:column;gap:12px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+h1{font-size:1.9rem;line-height:1;margin:0;font-weight:700}
+.stats{display:flex;gap:8px}
+.stat{background:var(--panel);border-radius:12px;padding:4px 12px;text-align:center;min-width:72px}
+.stat small{display:block;color:var(--muted);font-size:.75rem;line-height:1.1}
+.stat b{font-size:1.25rem;line-height:1.2}
+.board{position:relative;touch-action:none;border-radius:16px;overflow:hidden;line-height:0}
+canvas{width:100%;height:auto;display:block}
+#ov{position:absolute;inset:0;background:var(--shade);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;padding:20px;line-height:1.35;color:#fff}
+#ov[hidden]{display:none}
+#ov h2{margin:0;font-size:1.8rem}
+#ov p{margin:0 0 8px;max-width:30ch}
+button{font:inherit;cursor:pointer;border:0}
+#go{background:var(--food);color:#fff;font-weight:700;font-size:1.1rem;padding:8px 26px;border-radius:999px}
+button:focus-visible{outline:3px solid var(--ink);outline-offset:2px}
+.pad{display:grid;grid-template-columns:repeat(3,64px);grid-template-rows:repeat(2,52px);gap:6px;justify-content:center}
+.pad button{background:var(--panel);color:var(--ink);border-radius:14px;font-size:1.3rem}
+.pad button:active{background:var(--snake);color:var(--bg)}
+.pad [data-d=up]{grid-column:2;grid-row:1}
+.pad [data-d=left]{grid-column:1;grid-row:2}
+.pad [data-d=down]{grid-column:2;grid-row:2}
+.pad [data-d=right]{grid-column:3;grid-row:2}
+.hint{text-align:center;color:var(--muted);font-size:.9rem;margin:0}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Rắn săn mồi</h1>
+    <div class="stats">
+      <div class="stat"><small>Điểm</small><b id="score">0</b></div>
+      <div class="stat"><small>Cao nhất</small><b id="best">0</b></div>
+    </div>
+  </header>
+  <div class="board" id="board">
+    <canvas id="c" width="400" height="400" aria-label="Bàn chơi rắn săn mồi"></canvas>
+    <div id="ov"><h2 id="ovT"></h2><p id="ovP"></p><button id="go"></button></div>
+  </div>
+  <div class="pad" aria-label="Nút điều khiển">
+    <button data-d="up" aria-label="Lên">▲</button>
+    <button data-d="left" aria-label="Trái">◀</button>
+    <button data-d="down" aria-label="Xuống">▼</button>
+    <button data-d="right" aria-label="Phải">▶</button>
+  </div>
+  <p class="hint">Phím mũi tên hoặc WASD để rẽ. Space để tạm dừng.</p>
+</main>
+<script>
+(function(){
+var N=20,S=20,cv=document.getElementById('c'),ctx=cv.getContext('2d');
+var $=function(id){return document.getElementById(id)};
+var snake,dir,queue,food,score=0,best=0,state='ready',timer;
+try{best=+localStorage.getItem('snake-best')||0}catch(e){}
+$('best').textContent=best;
+var DIRS={up:[0,-1],down:[0,1],left:[-1,0],right:[1,0]};
+
+function show(t,p,b){$('ovT').textContent=t;$('ovP').textContent=p;$('go').textContent=b;$('ov').hidden=false}
+function hide(){$('ov').hidden=true}
+
+function reset(){
+  snake=[[8,10],[7,10],[6,10]];dir=DIRS.right;queue=[];score=0;
+  $('score').textContent=0;placeFood();draw();
+}
+function placeFood(){
+  var p;
+  do{p=[Math.floor(Math.random()*N),Math.floor(Math.random()*N)]}
+  while(snake.some(function(s){return s[0]===p[0]&&s[1]===p[1]}));
+  food=p;
+}
+function begin(){
+  clearTimeout(timer);reset();state='playing';hide();
+  timer=setTimeout(tick,140);
+}
+function end(win){
+  state='over';clearTimeout(timer);
+  if(score>best){best=score;$('best').textContent=best;try{localStorage.setItem('snake-best',best)}catch(e){}}
+  show(win?'Bạn thắng!':'Rắn đụng rồi',win?'Rắn đã kín cả bàn chơi. Điểm: '+score:'Điểm của bạn: '+score,'Chơi lại');
+}
+function tick(){
+  if(state!=='playing')return;
+  if(queue.length)dir=queue.shift();
+  var h=[snake[0][0]+dir[0],snake[0][1]+dir[1]];
+  var eat=h[0]===food[0]&&h[1]===food[1];
+  var body=eat?snake:snake.slice(0,-1);
+  if(h[0]<0||h[1]<0||h[0]>=N||h[1]>=N||body.some(function(s){return s[0]===h[0]&&s[1]===h[1]})){draw();return end(false)}
+  snake.unshift(h);
+  if(eat){
+    score++;$('score').textContent=score;
+    if(snake.length===N*N){draw();return end(true)}
+    placeFood();
+  }else snake.pop();
+  draw();
+  timer=setTimeout(tick,Math.max(65,140-score*3));
+}
+function turn(n){
+  if(state==='ready'||state==='over')begin();
+  if(state!=='playing')return;
+  var d=DIRS[n],last=queue.length?queue[queue.length-1]:dir;
+  if(d[0]+last[0]===0&&d[1]+last[1]===0)return;
+  if(d===last)return;
+  if(queue.length<2)queue.push(d);
+}
+function pause(){
+  if(state==='playing'){state='paused';clearTimeout(timer);show('Tạm dừng','Bấm Space hoặc nút bên dưới để chơi tiếp.','Tiếp tục')}
+  else if(state==='paused'){state='playing';hide();timer=setTimeout(tick,120)}
+}
+
+function rr(x,y,w,h,r){ctx.beginPath();if(ctx.roundRect)ctx.roundRect(x,y,w,h,r);else ctx.rect(x,y,w,h);ctx.fill()}
+function draw(){
+  var cs=getComputedStyle(document.documentElement);
+  var v=function(n){return cs.getPropertyValue(n).trim()};
+  var x,y;
+  for(y=0;y<N;y++)for(x=0;x<N;x++){ctx.fillStyle=(x+y)%2?v('--g1'):v('--g2');ctx.fillRect(x*S,y*S,S,S)}
+  ctx.fillStyle=v('--food');ctx.beginPath();ctx.arc(food[0]*S+S/2,food[1]*S+S/2+1,S/2-3,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle=v('--snake');
+  snake.forEach(function(s,i){rr(s[0]*S+1,s[1]*S+1,S-2,S-2,i?5:8)});
+  var hx=snake[0][0]*S+S/2,hy=snake[0][1]*S+S/2,px=-dir[1],py=dir[0],k;
+  for(k=-1;k<=1;k+=2){
+    var ex=hx+dir[0]*3+px*5*k,ey=hy+dir[1]*3+py*5*k;
+    ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(ex,ey,3,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#14232b';ctx.beginPath();ctx.arc(ex+dir[0],ey+dir[1],1.4,0,Math.PI*2);ctx.fill();
+  }
+}
+
+var KEYS={arrowup:'up',arrowdown:'down',arrowleft:'left',arrowright:'right',w:'up',s:'down',a:'left',d:'right'};
+addEventListener('keydown',function(e){
+  var k=e.key.toLowerCase();
+  if(KEYS[k]){e.preventDefault();turn(KEYS[k])}
+  else if(k===' '||k==='p'){e.preventDefault();pause()}
+  else if(k==='enter'&&(state==='ready'||state==='over')){begin()}
+});
+document.querySelectorAll('.pad button').forEach(function(b){
+  b.addEventListener('pointerdown',function(e){e.preventDefault();turn(b.dataset.d)});
+});
+$('go').addEventListener('click',function(){state==='paused'?pause():begin()});
+
+var t0=null,board=$('board');
+board.addEventListener('touchstart',function(e){t0=[e.touches[0].clientX,e.touches[0].clientY]},{passive:true});
+board.addEventListener('touchend',function(e){
+  if(!t0)return;
+  var dx=e.changedTouches[0].clientX-t0[0],dy=e.changedTouches[0].clientY-t0[1];t0=null;
+  if(Math.max(Math.abs(dx),Math.abs(dy))<24)return;
+  turn(Math.abs(dx)>Math.abs(dy)?(dx>0?'right':'left'):(dy>0?'down':'up'));
+});
+document.addEventListener('visibilitychange',function(){if(document.hidden&&state==='playing')pause()});
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',function(){draw()});
+
+reset();
+show('Rắn săn mồi','Ăn quả đỏ để dài ra. Đừng đụng tường hay thân mình. Trên điện thoại, vuốt trên bàn chơi để rẽ.','Bắt đầu');
+})();
+</script>
+</body>
+</html>
